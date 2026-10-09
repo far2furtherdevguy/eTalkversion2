@@ -1,0 +1,52 @@
+name: Build Android AAB
+on:
+  workflow_dispatch:
+  push:
+    tags: ['v*']
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    env:
+      KEYSTORE_B64: ${{ secrets.KEYSTORE_B64 }}
+      KEYSTORE_PASS: ${{ secrets.KEYSTORE_PASS }}
+      KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 20 }
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: 17 }
+      - run: npm install
+      - run: npx cap add android
+      - name: Permissions + version code
+        run: |
+          sed -i 's#</manifest>#<uses-permission android:name="android.permission.CAMERA"/><uses-permission android:name="android.permission.RECORD_AUDIO"/><uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS"/><uses-feature android:name="android.hardware.camera" android:required="false"/></manifest>#' android/app/src/main/AndroidManifest.xml
+          sed -i "s/versionCode 1/versionCode ${{ github.run_number }}/" android/app/build.gradle
+      - run: npx cap sync android
+      - name: Build release bundle
+        working-directory: android
+        run: chmod +x gradlew && ./gradlew bundleRelease
+      - name: Prepare keystore
+        run: |
+          if [ -n "$KEYSTORE_B64" ]; then
+            echo "$KEYSTORE_B64" | base64 -d > release.jks
+          else
+            echo "No secrets set: generating a NEW keystore (save it from the artifact!)"
+            KEYSTORE_PASS=etalkpass123; KEY_ALIAS=etalk
+            keytool -genkeypair -keystore release.jks -alias $KEY_ALIAS -keyalg RSA -keysize 2048 -validity 10000 \
+              -storepass $KEYSTORE_PASS -keypass $KEYSTORE_PASS -dname "CN=eTalk"
+            echo "KEYSTORE_PASS=$KEYSTORE_PASS" >> $GITHUB_ENV
+            echo "KEY_ALIAS=$KEY_ALIAS" >> $GITHUB_ENV
+          fi
+      - name: Sign AAB
+        run: |
+          cp android/app/build/outputs/bundle/release/app-release.aab eTalk.aab
+          jarsigner -sigalg SHA256withRSA -digestalg SHA-256 -keystore release.jks \
+            -storepass "$KEYSTORE_PASS" -keypass "$KEYSTORE_PASS" eTalk.aab "$KEY_ALIAS"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: eTalk-aab
+          path: |
+            eTalk.aab
+            release.jks
