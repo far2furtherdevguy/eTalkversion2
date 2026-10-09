@@ -1,0 +1,6 @@
+{
+  "appId": "com.etalk.app",
+  "appName": "eTalk",
+  "webDir": "www",
+  "server": { "androidScheme": "https" }
+}
