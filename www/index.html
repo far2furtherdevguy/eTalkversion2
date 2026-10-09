@@ -1,0 +1,357 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>eTalk -- Video Call</title>
+<style>
+*{box-sizing:border-box}[hidden]{display:none!important}
+body{margin:0;background:#0f1220;color:#fff;font-family:system-ui,sans-serif;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:env(safe-area-inset-top) 16px env(safe-area-inset-bottom)}
+.s{width:100%;max-width:420px;text-align:center}
+h1{font-size:2.2rem;margin:0 0 8px}p{color:#aab}
+input{width:100%;font-size:2rem;letter-spacing:.6em;text-align:center;padding:14px;border-radius:12px;border:2px solid #334;background:#1a1f35;color:#fff;margin:16px 0}
+input.t{letter-spacing:0;font-size:1.1rem;text-align:left;padding:12px;margin:6px 0}
+button{background:#4f7cff;color:#fff;border:0;border-radius:12px;padding:14px 22px;font-size:1rem;margin:6px;cursor:pointer}
+button.g{background:#2a3050}button.r{background:#e5484d}button.ok{background:#2fb86a}
+video{width:100%;border-radius:14px;background:#000;max-height:60vh}
+.av{background:#2a3050 center/cover no-repeat;display:flex;align-items:center;justify-content:center;border-radius:50%;font-weight:700;flex:none}
+#net{position:fixed;top:0;left:0;right:0;background:#b8860b;text-align:center;font-size:.8rem;padding:4px;z-index:20}
+#home{align-self:flex-start;padding-top:24px}
+.hd{display:flex;align-items:center;gap:12px;text-align:left}.hd .av{width:56px;height:56px;font-size:1.4rem;cursor:pointer}
+.u{display:flex;align-items:center;gap:12px;padding:10px;border-radius:12px;background:#1a1f35;margin:8px 0;text-align:left;cursor:pointer}
+.u .av{width:48px;height:48px}.dot{width:12px;height:12px;border-radius:50%;background:#3ddc84;margin-left:auto}
+#cv{width:280px;height:280px;border-radius:50%;background:#000;touch-action:none}
+#incoming{position:fixed;inset:0;background:#000d;z-index:30;display:flex;align-items:center;justify-content:center;flex-direction:column}
+#incoming .av{width:120px;height:120px;font-size:3rem;margin-bottom:12px}
+#call{max-width:none;position:fixed;inset:0;background:#000}
+#remote{position:absolute;inset:0;width:100%;height:100%;max-height:none;border-radius:0;object-fit:cover;z-index:1;visibility:hidden}
+#rbig{position:absolute;left:50%;top:45%;transform:translate(-50%,-50%);width:min(55vw,240px);height:min(55vw,240px);font-size:4.5rem;z-index:0}
+#local,#lbub{position:absolute;right:12px;top:calc(env(safe-area-inset-top) + 12px);z-index:2;border:2px solid #fff3}
+#local{width:28vw;max-width:140px;height:auto}#lbub{width:72px;height:72px;font-size:1.8rem}
+#bar{position:absolute;bottom:calc(env(safe-area-inset-bottom) + 16px);left:0;right:0;z-index:2}
+#timer{position:absolute;top:calc(env(safe-area-inset-top) + 14px);left:14px;z-index:2;background:#0008;padding:4px 10px;border-radius:8px}
+#status{position:absolute;bottom:90px;left:0;right:0;z-index:2;color:#aab}
+.pin{font-size:2.4rem;letter-spacing:.4em;color:#7aa2ff}
+</style>
+</head>
+<body>
+<div id="net">Connecting to server… (can take up to a minute if it was asleep)</div>
+
+<div class="s" id="auth">
+  <h1>eTalk</h1><p id="atitle">Log in</p>
+  <input class="t" id="au" placeholder="Username" autocapitalize="none" autocomplete="username">
+  <input class="t" id="ap" type="password" inputmode="numeric" maxlength="8" placeholder="PIN (4-8 digits)">
+  <button id="abtn">Log in</button><br>
+  <button class="g" id="aswap">Create account</button><br>
+  <button class="g" id="toPin">Private PIN call (anonymous)</button>
+</div>
+
+<div class="s" id="home" hidden>
+  <div class="hd"><div class="av" id="myav" title="Change photo"></div><div><b id="mname"></b><br><small>Tap photo to change</small></div>
+    <button class="g" id="logout" style="margin-left:auto">Log out</button></div>
+  <input type="file" id="file" accept="image/*" hidden>
+  <button class="g" id="toPin2" style="width:100%;margin:12px 0">Private PIN call</button>
+  <h3 style="text-align:left">Discover — online now</h3><div id="list"></div>
+</div>
+
+<div class="s" id="pinhome" hidden>
+  <h1>Private call</h1><p>Enter a 4-8 digit PIN. Anyone with the same PIN joins you.</p>
+  <input id="pin" inputmode="numeric" maxlength="8" placeholder="0000" autocomplete="off">
+  <button id="joinBtn">Join Call</button><button class="g" id="pBack">Back</button>
+</div>
+
+<div class="s" id="crop" hidden>
+  <h2>Crop photo</h2><canvas id="cv" width="280" height="280"></canvas>
+  <input type="range" id="zoom" min="1" max="3" step="0.01" value="1" style="padding:0">
+  <div><button class="g" id="cCancel">Cancel</button><button id="cSave">Save</button></div>
+</div>
+
+<div class="s" id="preview" hidden>
+  <h2>Camera Preview</h2><p>Check your camera before joining</p>
+  <video id="pv" autoplay muted playsinline></video>
+  <div><button class="g" id="pCancel">Cancel</button><button id="enter">Enter Room</button></div>
+</div>
+
+<div class="s" id="waiting" hidden>
+  <h2 id="wtitle">Waiting for someone to join...</h2>
+  <div class="pin" id="wpin"></div>
+  <button class="g" id="wCancel">Cancel</button>
+</div>
+
+<div class="s" id="call" hidden>
+  <div id="timer">00:00</div>
+  <div class="av" id="rbig"></div>
+  <video id="remote" autoplay playsinline></video>
+  <div class="av" id="lbub"></div>
+  <video id="local" autoplay muted playsinline></video>
+  <div id="status"></div>
+  <div id="bar">
+    <button class="g" id="mic">Mute</button><button class="g" id="cam">Camera</button>
+    <button class="g" id="share">Share</button><button class="r" id="leave">Leave</button>
+  </div>
+</div>
+
+<div class="s" id="lost" hidden>
+  <h2>Connection lost</h2><p>Your call was interrupted</p>
+  <button id="reconnect">Reconnect</button><button class="g" id="lLeave">Leave</button>
+</div>
+
+<div id="incoming" hidden>
+  <div class="av" id="iav"></div><h2 id="iname"></h2><p>Incoming video call…</p>
+  <div><button class="r" id="decline">Decline</button><button class="ok" id="accept">Accept</button></div>
+</div>
+
+<script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
+<script>
+const SERVER = 'https://etalk-video.onrender.com';
+const SUPABASE_URL = 'hudraerlvwpigvcriebi.supabase.co';
+const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imh1ZHJhZXJsdndwaWd2Y3JpZWJpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTE1NTA0MDcsImV4cCI6MjEwNzEyNjQwN30.vvk667WrbNe56_U84uatrb4DU-LTKGHCAYDlLzHKEv4';
+const FALLBACK_ICE = [
+  { urls: 'stun:stun.l.google.com:19302' }, { urls: 'stun:stun.relay.metered.ca:80' },
+  { urls: ['turn:openrelay.metered.ca:80', 'turn:openrelay.metered.ca:443', 'turn:openrelay.metered.ca:443?transport=tcp', 'turns:openrelay.metered.ca:443?transport=tcp'], username: 'openrelayproject', credential: 'openrelayproject' }
+];
+const CID = crypto.randomUUID ? crypto.randomUUID() : String(Math.random()).slice(2) + Date.now();
+const $ = (id) => document.getElementById(id);
+const show = (n) => document.querySelectorAll('.s').forEach((e) => (e.hidden = e.id !== n));
+const wait = (t) => { $('wtitle').textContent = t; show('waiting'); };
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+let me = null, online = [], iceServers = FALLBACK_ICE, pc, stream, tInt, connT, offerT, leftT, t0, pendingC = [];
+let inCall = false, sharing = false, camTrack, curPin = null, named = false, outgoing = null, incoming = null, peerProf = null;
+let rTrack = null, rCam = true, camOn = true, gotOffer = false, signup = false;
+
+function setAv(el, p) {
+  const has = p && p.avatar;
+  el.style.backgroundImage = has ? `url("${p.avatar}")` : '';
+  el.textContent = has ? '' : (p && p.username ? p.username[0].toUpperCase() : '👤');
+}
+async function loadIce() {
+  try {
+    const c = new AbortController(); setTimeout(() => c.abort(), 8000);
+    const j = await (await fetch(SERVER + '/ice', { signal: c.signal })).json();
+    if (Array.isArray(j) && j.length) iceServers = j;
+  } catch (_) {}
+}
+async function getMedia() {
+  if (stream) return stream;
+  try { stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' }, audio: true }); camOn = true; }
+  catch (e) { alert('Camera/microphone access is required: ' + e.message); throw e; }
+  return stream;
+}
+function stopMedia() { if (stream) stream.getTracks().forEach((t) => t.stop()); stream = null; }
+if (!navigator.mediaDevices || !navigator.mediaDevices.getDisplayMedia) $('share').style.display = 'none';
+
+// ---------- Socket ----------
+const S = io(SERVER, { transports: ['websocket', 'polling'], reconnectionDelay: 500, reconnectionDelayMax: 4000 });
+async function sendLogin() {
+  const { data } = await sb.auth.getSession();
+  S.emit('login', data.session && data.session.access_token, { id: me.id, username: me.username, avatar: me.avatar });
+}
+S.on('connect', async () => { $('net').hidden = true; loadIce(); if (me) await sendLogin(); if (curPin) S.emit('join', curPin, CID, named); });
+S.on('connect_error', () => ($('net').hidden = false));
+S.on('disconnect', () => { $('net').hidden = false; if (inCall || pc) { inCall = false; cleanupPeer(); show('lost'); } });
+S.on('online', (l) => { online = l; renderList(); });
+S.on('login-fail', () => { alert('Session expired, log in again'); logout(); });
+S.on('waiting', () => wait(outgoing ? 'Calling ' + (peerProf ? peerProf.username : '') + '...' : 'Waiting for someone to join...'));
+S.on('matched', ({ initiator, peer }) => { peerProf = peer; startPeer(initiator); });
+S.on('signal', onSignal);
+S.on('peer-left', () => {
+  inCall = false; cleanupPeer();
+  wait('The other person left. Waiting for them to rejoin...');
+  if (named) leftT = setTimeout(hangup, 20000);
+});
+S.on('err', (m) => { alert(m); hangup(); });
+S.on('calling', ({ pin }) => { curPin = pin; named = true; outgoing = pin; S.emit('join', pin, CID, true); });
+S.on('call-fail', (m) => { alert(m); hangup(); });
+S.on('call-end', ({ reason }) => { if (outgoing) { alert(reason === 'declined' ? 'Call declined' : 'No answer'); hangup(); } });
+S.on('incoming', ({ pin, from }) => {
+  if (curPin || incoming) return S.emit('end-call', pin);
+  incoming = { pin, from }; setAv($('iav'), from); $('iname').textContent = from.username; $('incoming').hidden = false;
+});
+S.on('incoming-end', ({ pin }) => { if (incoming && incoming.pin === pin) { incoming = null; $('incoming').hidden = true; } });
+
+// ---------- Accounts ----------
+const mail = (u) => u.toLowerCase() + '@etalk.app', pw = (p) => p + '#etalk';
+$('aswap').onclick = () => {
+  signup = !signup;
+  $('atitle').textContent = signup ? 'Create account' : 'Log in';
+  $('abtn').textContent = signup ? 'Sign up' : 'Log in';
+  $('aswap').textContent = signup ? 'I have an account' : 'Create account';
+};
+$('abtn').onclick = async () => {
+  const u = $('au').value.trim(), p = $('ap').value;
+  if (!/^\w{3,20}$/.test(u) || !/^\d{4,8}$/.test(p)) return alert('Username: 3-20 letters/numbers. PIN: 4-8 digits.');
+  if (signup) {
+    const r = await sb.auth.signUp({ email: mail(u), password: pw(p) });
+    if (r.error) return alert(/registered/i.test(r.error.message) ? 'Username taken' : r.error.message);
+    if (!r.data.session) return alert('In Supabase: Authentication > Providers > Email > turn OFF "Confirm email"');
+    const { error } = await sb.from('profiles').insert({ id: r.data.user.id, username: u.toLowerCase() });
+    if (error) return alert(error.message);
+  } else {
+    const r = await sb.auth.signInWithPassword({ email: mail(u), password: pw(p) });
+    if (r.error) return alert('Wrong username or PIN');
+  }
+  enterHome();
+};
+async function enterHome() {
+  const { data: { session } } = await sb.auth.getSession();
+  if (!session) return show('auth');
+  const { data } = await sb.from('profiles').select('*').eq('id', session.user.id).single();
+  if (!data) { await sb.auth.signOut(); return show('auth'); }
+  me = { id: data.id, username: data.username, avatar: data.avatar_url };
+  if (S.connected) await sendLogin();
+  setAv($('myav'), me); $('mname').textContent = me.username; renderList(); show('home');
+}
+async function logout() { S.emit('logout'); await sb.auth.signOut(); me = null; show('auth'); }
+$('logout').onclick = logout;
+function renderList() {
+  const L = $('list'); L.innerHTML = '';
+  const users = online.filter((u) => !me || u.id !== me.id);
+  if (!users.length) { L.innerHTML = '<p>Nobody else is online right now</p>'; return; }
+  users.forEach((u) => {
+    const d = document.createElement('div'); d.className = 'u';
+    d.innerHTML = '<div class="av"></div><b></b><i class="dot"></i>';
+    setAv(d.firstChild, u); d.children[1].textContent = u.username; d.onclick = () => callUser(u);
+    L.appendChild(d);
+  });
+}
+
+// ---------- Profile photo crop ----------
+let img, ox = 0, oy = 0, z = 1, drag;
+const dims = () => { const s = (280 / Math.min(img.width, img.height)) * z; return [img.width * s, img.height * s]; };
+function clamp() { const [w, h] = dims(); ox = Math.min(0, Math.max(280 - w, ox)); oy = Math.min(0, Math.max(280 - h, oy)); }
+function draw() { clamp(); const [w, h] = dims(), c = $('cv').getContext('2d'); c.clearRect(0, 0, 280, 280); c.drawImage(img, ox, oy, w, h); }
+$('myav').onclick = () => $('file').click();
+$('file').onchange = (e) => {
+  const f = e.target.files[0]; if (!f) return;
+  const i = new Image();
+  i.onload = () => { img = i; z = 1; $('zoom').value = 1; const [w, h] = dims(); ox = (280 - w) / 2; oy = (280 - h) / 2; draw(); show('crop'); };
+  i.src = URL.createObjectURL(f); e.target.value = '';
+};
+$('zoom').oninput = (e) => { const [w0] = dims(); z = +e.target.value; const [w1] = dims(), k = w1 / w0; ox = 140 - (140 - ox) * k; oy = 140 - (140 - oy) * k; draw(); };
+$('cv').onpointerdown = (e) => { drag = [e.clientX, e.clientY]; $('cv').setPointerCapture(e.pointerId); };
+$('cv').onpointermove = (e) => { if (!drag) return; ox += e.clientX - drag[0]; oy += e.clientY - drag[1]; drag = [e.clientX, e.clientY]; draw(); };
+$('cv').onpointerup = () => (drag = null);
+$('cCancel').onclick = () => show('home');
+$('cSave').onclick = async () => {
+  const o = document.createElement('canvas'); o.width = o.height = 256; const k = 256 / 280, [w, h] = dims();
+  o.getContext('2d').drawImage(img, ox * k, oy * k, w * k, h * k);
+  const blob = await new Promise((r) => o.toBlob(r, 'image/jpeg', 0.85));
+  const path = me.id + '.jpg';
+  const up = await sb.storage.from('avatars').upload(path, blob, { upsert: true, contentType: 'image/jpeg' });
+  if (up.error) return alert(up.error.message);
+  const url = sb.storage.from('avatars').getPublicUrl(path).data.publicUrl + '?v=' + Date.now();
+  const { error } = await sb.from('profiles').update({ avatar_url: url }).eq('id', me.id);
+  if (error) return alert(error.message);
+  me.avatar = url; await sendLogin(); setAv($('myav'), me); show('home');
+};
+
+// ---------- Calling ----------
+async function callUser(u) {
+  try { await getMedia(); } catch (_) { return; }
+  peerProf = u; named = true; S.emit('call', u.id); wait('Calling ' + u.username + '...');
+}
+$('accept').onclick = async () => {
+  const c = incoming; incoming = null; $('incoming').hidden = true;
+  try { await getMedia(); } catch (_) { return S.emit('end-call', c.pin); }
+  peerProf = c.from; curPin = c.pin; named = true; S.emit('join', c.pin, CID, true); wait('Connecting...');
+};
+$('decline').onclick = () => { S.emit('end-call', incoming.pin); incoming = null; $('incoming').hidden = true; };
+
+$('toPin').onclick = $('toPin2').onclick = () => show('pinhome');
+$('pBack').onclick = () => show(me ? 'home' : 'auth');
+$('pin').oninput = (e) => (e.target.value = e.target.value.replace(/\D/g, ''));
+$('joinBtn').onclick = async () => {
+  if (!/^\d{4,8}$/.test($('pin').value)) return alert('Enter a 4-8 digit PIN');
+  try { $('pv').srcObject = await getMedia(); show('preview'); } catch (_) {}
+};
+$('pCancel').onclick = () => { stopMedia(); show('pinhome'); };
+$('enter').onclick = () => {
+  curPin = $('pin').value; named = false; outgoing = null; peerProf = null;
+  $('wpin').textContent = curPin; wait('Waiting for someone to join...'); S.emit('join', curPin, CID, false);
+};
+$('wCancel').onclick = $('leave').onclick = $('lLeave').onclick = hangup;
+$('reconnect').onclick = () => { wait('Reconnecting...'); S.disconnect(); S.connect(); };
+
+function refreshView() {
+  const live = !!(rTrack && !rTrack.muted && rCam && inCall);
+  $('remote').style.visibility = live ? 'visible' : 'hidden';
+  $('rbig').style.display = live ? 'none' : 'flex';
+  const ll = camOn && inCall;
+  $('local').style.display = ll ? 'block' : 'none';
+  $('lbub').style.display = ll ? 'none' : 'flex';
+}
+function startPeer(initiator) {
+  cleanupPeer(); clearTimeout(leftT);
+  if (!stream) return hangup();
+  $('wpin').textContent = ''; setAv($('rbig'), peerProf); setAv($('lbub'), named ? me : null);
+  $('local').srcObject = stream; $('status').textContent = 'Connecting…'; show('call'); refreshView();
+  let p;
+  try { p = new RTCPeerConnection({ iceServers }); } catch (_) { p = new RTCPeerConnection({ iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] }); }
+  pc = p; gotOffer = false;
+  stream.getTracks().forEach((t) => p.addTrack(t, stream));
+  p.ontrack = (e) => {
+    $('remote').srcObject = e.streams[0]; $('remote').play().catch(() => {});
+    if (e.track.kind === 'video') { rTrack = e.track; e.track.onmute = e.track.onunmute = refreshView; refreshView(); }
+  };
+  p.onicecandidate = (e) => e.candidate && S.emit('signal', { c: e.candidate });
+  p.oniceconnectionstatechange = () => { if (p === pc && !inCall) $('status').textContent = 'Connecting… (' + p.iceConnectionState + ')'; };
+  p.onconnectionstatechange = () => {
+    if (p !== pc) return;
+    const s = p.connectionState;
+    if (s === 'connected') { clearTimeout(connT); clearTimeout(offerT); inCall = true; $('status').textContent = ''; startTimer(); S.emit('signal', { cam: camOn }); refreshView(); }
+    else if (s === 'failed') { inCall = false; cleanupPeer(); show('lost'); }
+    else if (s === 'disconnected') setTimeout(() => p === pc && p.connectionState === 'disconnected' && (inCall = false, cleanupPeer(), show('lost')), 5000);
+  };
+  connT = setTimeout(() => { if (p === pc && !inCall) { cleanupPeer(); show('lost'); } }, 25000);
+  if (initiator) {
+    const send = async () => { // re-sent every 4s until answered, so a dropped offer can't stall the call
+      if (p !== pc || inCall) return;
+      try { if (!p.localDescription) await p.setLocalDescription(await p.createOffer()); S.emit('signal', { d: p.localDescription }); } catch (e) { console.error(e); }
+      offerT = setTimeout(send, 4000);
+    };
+    send();
+  }
+}
+async function onSignal({ d, c, cam }) {
+  if (cam !== undefined) { rCam = cam; refreshView(); }
+  const p = pc; if (!p) return;
+  try {
+    if (d) {
+      if (d.type === 'offer') { if (gotOffer) return; gotOffer = true; }
+      await p.setRemoteDescription(d);
+      for (const x of pendingC.splice(0)) await p.addIceCandidate(x).catch(() => {});
+      if (d.type === 'offer') { await p.setLocalDescription(await p.createAnswer()); S.emit('signal', { d: p.localDescription }); }
+    } else if (c) { if (p.remoteDescription) await p.addIceCandidate(c); else pendingC.push(c); }
+  } catch (e) { console.error(e); }
+}
+function startTimer() {
+  if (tInt) return; t0 = Date.now();
+  tInt = setInterval(() => { const s = Math.floor((Date.now() - t0) / 1000); $('timer').textContent = String(Math.floor(s / 60)).padStart(2, '0') + ':' + String(s % 60).padStart(2, '0'); }, 1000);
+}
+function cleanupPeer() {
+  clearInterval(tInt); tInt = null; clearTimeout(connT); clearTimeout(offerT); pendingC = []; rTrack = null; rCam = true;
+  $('timer').textContent = '00:00'; if (pc) { const p = pc; pc = null; p.close(); } $('remote').srcObject = null;
+}
+function hangup() {
+  inCall = false; cleanupPeer(); clearTimeout(leftT);
+  if (outgoing) S.emit('end-call', outgoing);
+  if (curPin) S.emit('leave');
+  curPin = outgoing = peerProf = null; named = false; stopMedia(); sharing = false;
+  show(me ? 'home' : 'auth');
+}
+$('mic').onclick = () => { const t = stream.getAudioTracks()[0]; t.enabled = !t.enabled; $('mic').textContent = t.enabled ? 'Mute' : 'Unmute'; };
+$('cam').onclick = () => { const t = stream.getVideoTracks()[0]; t.enabled = !t.enabled; camOn = t.enabled; $('cam').textContent = camOn ? 'Camera' : 'Cam off'; S.emit('signal', { cam: camOn }); refreshView(); };
+$('share').onclick = async () => {
+  const sender = pc && pc.getSenders().find((s) => s.track && s.track.kind === 'video'); if (!sender) return;
+  if (!sharing) {
+    try {
+      const d = await navigator.mediaDevices.getDisplayMedia({ video: true }); camTrack = sender.track; const st = d.getVideoTracks()[0];
+      await sender.replaceTrack(st); st.onended = () => sharing && $('share').click(); sharing = true; $('share').textContent = 'Stop share';
+    } catch (_) {}
+  } else { sender.track.stop(); await sender.replaceTrack(camTrack); sharing = false; $('share').textContent = 'Share'; }
+};
+enterHome();
+</script>
+</body>
+</html>
